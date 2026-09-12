@@ -168,7 +168,7 @@ function SetupModal({ initial, onClose, onStart }: { initial: WorkoutDraft; onCl
     <fieldset><legend>Modalidade</legend><div className="mode-grid">{(Object.keys(modes) as WorkoutMode[]).map(mode => <button key={mode} className={draft.mode === mode ? 'selected' : ''} onClick={() => setDraft({ ...draft, mode })}>{modes[mode]}<small>{mode === 'emom' ? 'Rounds automáticos' : mode === 'amrap' ? 'Máximo no tempo' : 'Complete sua meta'}</small></button>)}</div></fieldset>
     {draft.mode !== 'amrap' && <label>Meta de rounds<NumericInput min={1} max={999} value={draft.goal} onChange={value => number('goal', value)} /></label>}
     {draft.mode === 'amrap' && <label>Duração em minutos<NumericInput min={1} max={180} scale={60} value={draft.durationSec} onChange={value => number('durationSec', value)} /></label>}
-    {draft.mode === 'emom' && <div className="two-cols"><label>Trabalho por round (min)<NumericInput min={0.5} max={60} step={0.5} scale={60} value={draft.workSec} onChange={value => number('workSec', value)} /></label><label>Descanso por round (min)<NumericInput min={0} max={30} step={0.5} scale={60} value={draft.restSec} onChange={value => number('restSec', value)} /></label></div>}
+    {draft.mode === 'emom' && <div className="two-cols"><label>Trabalho por round (s)<NumericInput min={5} max={3600} value={draft.workSec} onChange={value => number('workSec', value)} /></label><label>Descanso por round (s)<NumericInput min={0} max={1800} value={draft.restSec} onChange={value => number('restSec', value)} /></label></div>}
     <button className="primary" onClick={() => onStart({ ...draft, name: draft.name.trim() || modes[draft.mode] })}>Começar treino</button>
   </section></div>
 }
