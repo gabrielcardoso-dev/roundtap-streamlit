@@ -186,6 +186,22 @@ def render_login() -> None:
 
 def render_roundtap() -> None:
     account = st.session_state.auth
+    brand_col, profile_col = st.columns([5, 1], vertical_alignment="center")
+    with brand_col:
+        st.markdown(
+            """
+            <div class="rt-app-brand">
+              <div class="rt-mini-dial">R</div>
+              <strong>RoundTap</strong><span>PERFORMANCE</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with profile_col:
+        if st.button("👤", key="open_profile", help="Abrir meu perfil", use_container_width=True):
+            st.query_params["profile"] = "1"
+            st.rerun()
+
     app_html = (ROOT / "roundtap.html").read_text(encoding="utf-8")
     suffix = str(account.get("user_id") or account["email"]).replace("'", "")
     app_html = app_html.replace("round20-v2-state", f"round20-v2-state-{suffix}")
@@ -258,6 +274,11 @@ st.markdown(
       div[data-testid="stFormSubmitButton"] button:hover {background:#bdff51;color:#071006}
       button[data-baseweb="tab"] {font-weight:800}
       iframe {border:0;border-radius:16px;background:#030604}
+      .rt-app-brand {height:62px;display:flex;align-items:center;gap:9px;color:#a8ff19;font-size:1.35rem;font-weight:950}
+      .rt-app-brand span {font-size:.58rem;color:#aab2ac;border:1px solid #333b35;border-radius:4px;padding:3px 6px;letter-spacing:.1em;margin-left:2px}
+      .rt-mini-dial {width:40px;height:40px;border:5px dashed #a8ff19;border-radius:50%;display:grid;place-items:center;color:white;font-size:.9rem;font-weight:950}
+      .st-key-open_profile button {width:44px!important;height:44px!important;min-height:44px!important;border-radius:50%!important;border:1px solid #303832!important;background:#0c110d!important;color:#a8ff19!important;font-size:1.15rem!important;padding:0!important}
+      .st-key-open_profile button:hover {border-color:#a8ff19!important;color:#a8ff19!important}
       .profile-head {display:flex;align-items:center;gap:16px;margin:1.5rem 0 1.2rem}
       .profile-avatar {width:64px;height:64px;border-radius:50%;display:grid;place-items:center;background:#a8ff19;color:#071006;font-size:1.65rem;font-weight:950;box-shadow:0 0 30px #a8ff1930}
       .profile-head span {color:#a8ff19;font-size:.72rem;font-weight:900;letter-spacing:.12em}
