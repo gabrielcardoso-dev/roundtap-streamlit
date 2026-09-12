@@ -63,19 +63,26 @@ def sign_in(email: str, password: str) -> str | None:
     if error:
         return error
     user = data.get("user") or {}
+    metadata = user.get("user_metadata") or {}
+    account_email = user.get("email", email.strip().lower())
     st.session_state.auth = {
         "access_token": data.get("access_token"),
         "refresh_token": data.get("refresh_token"),
         "user_id": user.get("id"),
-        "email": user.get("email", email.strip().lower()),
+        "email": account_email,
+        "name": metadata.get("full_name") or account_email.split("@", 1)[0].replace(".", " ").title(),
     }
     return None
 
 
-def sign_up(email: str, password: str) -> tuple[bool, str]:
+def sign_up(name: str, email: str, password: str) -> tuple[bool, str]:
     data, error = auth_request(
         "signup",
-        {"email": email.strip().lower(), "password": password},
+        {
+            "email": email.strip().lower(),
+            "password": password,
+            "data": {"full_name": name.strip()},
+        },
     )
     if error:
         return False, error
@@ -86,9 +93,35 @@ def sign_up(email: str, password: str) -> tuple[bool, str]:
             "refresh_token": data.get("refresh_token") or data.get("session", {}).get("refresh_token"),
             "user_id": user.get("id"),
             "email": user.get("email", email.strip().lower()),
+            "name": name.strip(),
         }
         return True, "Conta criada."
     return True, "Cadastro realizado. Confira seu e-mail para confirmar a conta."
+
+
+def update_password(access_token: str, password: str) -> str | None:
+    try:
+        response = requests.put(
+            f"{SUPABASE_URL}/auth/v1/user",
+            headers={
+                "apikey": SUPABASE_ANON_KEY,
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+            },
+            json={"password": password},
+            timeout=15,
+        )
+        if response.ok:
+            return None
+        data = response.json() if response.content else {}
+        message = data.get("msg") or data.get("message") or data.get("error_description")
+        if response.status_code == 401:
+            return "Sua sessão expirou. Entre novamente para alterar a senha."
+        if message == "Password should be at least 6 characters":
+            return "A senha precisa ter pelo menos 6 caracteres."
+        return message or "Não foi possível alterar a senha."
+    except (requests.RequestException, ValueError):
+        return "O serviço de acesso está temporariamente indisponível. Tente novamente."
 
 
 def render_brand() -> None:
@@ -125,19 +158,22 @@ def render_login() -> None:
 
     with signup_tab:
         with st.form("signup", clear_on_submit=False):
+            new_name = st.text_input("Nome", placeholder="Como devemos chamar você?")
             new_email = st.text_input("E-mail", placeholder="voce@email.com", key="new_email")
             new_password = st.text_input("Crie uma senha", type="password", help="Use pelo menos 6 caracteres.")
             confirmation = st.text_input("Repita a senha", type="password")
             registered = st.form_submit_button("Criar minha conta", use_container_width=True)
         if registered:
-            if "@" not in new_email or "." not in new_email.rsplit("@", 1)[-1]:
+            if len(new_name.strip()) < 2:
+                st.error("Informe seu nome.")
+            elif "@" not in new_email or "." not in new_email.rsplit("@", 1)[-1]:
                 st.error("Informe um e-mail válido.")
             elif len(new_password) < 6:
                 st.error("A senha precisa ter pelo menos 6 caracteres.")
             elif new_password != confirmation:
                 st.error("As senhas não coincidem.")
             else:
-                ok, message = sign_up(new_email, new_password)
+                ok, message = sign_up(new_name, new_email, new_password)
                 if ok:
                     st.success(message)
                     if st.session_state.get("auth"):
@@ -150,20 +186,58 @@ def render_login() -> None:
 
 def render_roundtap() -> None:
     account = st.session_state.auth
-    left, right = st.columns([4, 1])
-    with left:
-        st.caption(f"Conectado como {html.escape(account['email'])}")
-    with right:
-        if st.button("Sair", use_container_width=True):
-            st.session_state.pop("auth", None)
-            st.rerun()
-
     app_html = (ROOT / "roundtap.html").read_text(encoding="utf-8")
     suffix = str(account.get("user_id") or account["email"]).replace("'", "")
     app_html = app_html.replace("round20-v2-state", f"round20-v2-state-{suffix}")
     app_html = app_html.replace("round20-v2-history", f"round20-v2-history-{suffix}")
     app_html = app_html.replace("round20-v2-settings", f"round20-v2-settings-{suffix}")
     components.html(app_html, height=900, scrolling=False)
+
+
+def render_profile() -> None:
+    account = st.session_state.auth
+    email = account.get("email", "")
+    name = account.get("name") or email.split("@", 1)[0].replace(".", " ").title()
+
+    if st.button("← Voltar ao treino", key="back_to_workout"):
+        st.query_params.clear()
+        st.rerun()
+
+    st.markdown(
+        f"""
+        <div class="profile-head">
+          <div class="profile-avatar">{html.escape(name[:1].upper() or "A")}</div>
+          <div><span>PERFIL DO ATLETA</span><h1>{html.escape(name)}</h1></div>
+        </div>
+        <div class="profile-card">
+          <span>Nome</span><strong>{html.escape(name)}</strong>
+          <span>E-mail</span><strong>{html.escape(email)}</strong>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("<h2 class='profile-section'>Alterar senha</h2>", unsafe_allow_html=True)
+    with st.form("change_password", clear_on_submit=True):
+        new_password = st.text_input("Nova senha", type="password", help="Use pelo menos 6 caracteres.")
+        confirmation = st.text_input("Confirme a nova senha", type="password")
+        submitted = st.form_submit_button("Salvar nova senha", use_container_width=True)
+    if submitted:
+        if len(new_password) < 6:
+            st.error("A senha precisa ter pelo menos 6 caracteres.")
+        elif new_password != confirmation:
+            st.error("As senhas não coincidem.")
+        else:
+            error = update_password(account.get("access_token", ""), new_password)
+            if error:
+                st.error(error)
+            else:
+                st.success("Senha alterada com sucesso.")
+
+    if st.button("Sair do aplicativo", use_container_width=True, type="secondary"):
+        st.session_state.pop("auth", None)
+        st.query_params.clear()
+        st.rerun()
 
 
 st.markdown(
@@ -184,15 +258,32 @@ st.markdown(
       div[data-testid="stFormSubmitButton"] button:hover {background:#bdff51;color:#071006}
       button[data-baseweb="tab"] {font-weight:800}
       iframe {border:0;border-radius:16px;background:#030604}
+      .profile-head {display:flex;align-items:center;gap:16px;margin:1.5rem 0 1.2rem}
+      .profile-avatar {width:64px;height:64px;border-radius:50%;display:grid;place-items:center;background:#a8ff19;color:#071006;font-size:1.65rem;font-weight:950;box-shadow:0 0 30px #a8ff1930}
+      .profile-head span {color:#a8ff19;font-size:.72rem;font-weight:900;letter-spacing:.12em}
+      .profile-head h1 {color:white;font-size:1.75rem;margin:.2rem 0 0}
+      .profile-card {display:grid;background:#0a0f0b;border:1px solid #283029;border-radius:16px;padding:1.15rem;margin-bottom:1.4rem}
+      .profile-card span {color:#869087;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;margin-top:.8rem}
+      .profile-card span:first-child {margin-top:0}
+      .profile-card strong {color:#f5f7f3;margin-top:.18rem;overflow-wrap:anywhere}
+      .profile-section {color:white;font-size:1.15rem;margin:1.2rem 0 .7rem}
+      button[kind="secondary"] {border-color:#ff6259!important;color:#ff6259!important}
     </style>
     """,
     unsafe_allow_html=True,
 )
 
+if st.query_params.get("logout") == "1":
+    st.session_state.pop("auth", None)
+    st.query_params.clear()
+    st.rerun()
+
 if not SUPABASE_URL or not SUPABASE_ANON_KEY:
     render_brand()
     st.error("O acesso ainda precisa ser conectado ao banco de usuários antes da publicação.")
     st.info("Configure SUPABASE_URL e SUPABASE_ANON_KEY nos Secrets do Streamlit.")
+elif st.session_state.get("auth") and st.query_params.get("profile") == "1":
+    render_profile()
 elif st.session_state.get("auth"):
     render_roundtap()
 else:
