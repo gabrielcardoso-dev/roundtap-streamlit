@@ -129,6 +129,36 @@ function AuthScreen() {
   </main>
 }
 
+function NumericInput({ value, min, max, scale = 1, onChange }: { value: number; min: number; max: number; scale?: number; onChange: (value: number) => void }) {
+  const [text, setText] = useState(String(value / scale))
+
+  useEffect(() => { setText(String(value / scale)) }, [scale, value])
+
+  function commit() {
+    const parsed = text.trim() === '' ? min : Number(text)
+    const normalized = Math.min(max, Math.max(min, Number.isFinite(parsed) ? parsed : min))
+    setText(String(normalized))
+    onChange(normalized * scale)
+  }
+
+  return <input
+    type="number"
+    min={min}
+    max={max}
+    step="1"
+    inputMode="numeric"
+    value={text}
+    onChange={event => {
+      const next = event.target.value
+      setText(next)
+      if (next.trim() === '') return
+      const parsed = Number(next)
+      if (Number.isFinite(parsed)) onChange(parsed * scale)
+    }}
+    onBlur={commit}
+  />
+}
+
 function SetupModal({ initial, onClose, onStart }: { initial: WorkoutDraft; onClose: () => void; onStart: (draft: WorkoutDraft) => void }) {
   const [draft, setDraft] = useState(initial)
   const number = (key: keyof WorkoutDraft, value: number) => setDraft(d => ({ ...d, [key]: value }))
@@ -136,9 +166,9 @@ function SetupModal({ initial, onClose, onStart }: { initial: WorkoutDraft; onCl
     <header><h2 id="setup-title">Novo treino</h2><button className="close" onClick={onClose} aria-label="Fechar">×</button></header>
     <label>Nome do treino<input value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} maxLength={80} /></label>
     <fieldset><legend>Modalidade</legend><div className="mode-grid">{(Object.keys(modes) as WorkoutMode[]).map(mode => <button key={mode} className={draft.mode === mode ? 'selected' : ''} onClick={() => setDraft({ ...draft, mode })}>{modes[mode]}<small>{mode === 'emom' ? 'Rounds automáticos' : mode === 'amrap' ? 'Máximo no tempo' : 'Complete sua meta'}</small></button>)}</div></fieldset>
-    {draft.mode !== 'amrap' && <label>Meta de rounds<input type="number" min="1" max="999" value={draft.goal} onChange={e => number('goal', Math.max(1, Number(e.target.value)))} /></label>}
-    {draft.mode === 'amrap' && <label>Duração em minutos<input type="number" min="1" max="180" value={draft.durationSec / 60} onChange={e => number('durationSec', Math.max(1, Number(e.target.value)) * 60)} /></label>}
-    {draft.mode === 'emom' && <div className="two-cols"><label>Trabalho por round (s)<input type="number" min="5" max="3600" value={draft.workSec} onChange={e => number('workSec', Math.max(5, Number(e.target.value)))} /></label><label>Descanso (s)<input type="number" min="0" max="1800" value={draft.restSec} onChange={e => number('restSec', Math.max(0, Number(e.target.value)))} /></label></div>}
+    {draft.mode !== 'amrap' && <label>Meta de rounds<NumericInput min={1} max={999} value={draft.goal} onChange={value => number('goal', value)} /></label>}
+    {draft.mode === 'amrap' && <label>Duração em minutos<NumericInput min={1} max={180} scale={60} value={draft.durationSec} onChange={value => number('durationSec', value)} /></label>}
+    {draft.mode === 'emom' && <div className="two-cols"><label>Trabalho por round (s)<NumericInput min={5} max={3600} value={draft.workSec} onChange={value => number('workSec', value)} /></label><label>Descanso (s)<NumericInput min={0} max={1800} value={draft.restSec} onChange={value => number('restSec', value)} /></label></div>}
     <button className="primary" onClick={() => onStart({ ...draft, name: draft.name.trim() || modes[draft.mode] })}>Começar treino</button>
   </section></div>
 }
