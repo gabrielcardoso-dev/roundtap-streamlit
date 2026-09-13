@@ -7,7 +7,7 @@ import type { Preferences, WorkoutDraft, WorkoutMode, WorkoutRecord } from './ty
 const modes: Record<WorkoutMode, string> = { rounds: 'Rounds', fortime: 'For Time', amrap: 'AMRAP', emom: 'EMOM' }
 const defaultDraft: WorkoutDraft = { name: 'Treino livre', mode: 'rounds', goal: 20, durationSec: 720, workSec: 60, restSec: 0 }
 const defaultPreferences: Preferences = { sound: true, vibration: true, wakeLock: true }
-const ADMIN_EMAIL = 'sgabrielcardosoc7@gmail.com'
+const ADMIN_EMAILS = new Set(['sgabrielcardosoc@gmail.com', 'sgabrielcardosoc7@gmail.com'])
 
 type Suggestion = {
   id: string
@@ -308,7 +308,7 @@ function SettingsScreen({ value, onChange }: { value: Preferences; onChange: (va
 }
 
 function SuggestionsScreen({ user }: { user: User }) {
-  const admin = user.email?.toLowerCase() === ADMIN_EMAIL
+  const admin = ADMIN_EMAILS.has(user.email?.toLowerCase() || '')
   const [items, setItems] = useState<Suggestion[]>([])
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)

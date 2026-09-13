@@ -26,7 +26,7 @@ def secret(name: str) -> str:
 
 SUPABASE_URL = secret("SUPABASE_URL").rstrip("/")
 SUPABASE_ANON_KEY = secret("SUPABASE_ANON_KEY")
-ADMIN_EMAIL = "sgabrielcardosoc7@gmail.com"
+ADMIN_EMAILS = {"sgabrielcardosoc@gmail.com", "sgabrielcardosoc7@gmail.com"}
 
 
 def auth_request(path: str, payload: dict) -> tuple[dict, str | None]:
@@ -289,7 +289,7 @@ def render_profile() -> None:
 
 def render_suggestions() -> None:
     account = st.session_state.auth
-    is_admin = account.get("email", "").lower() == ADMIN_EMAIL
+    is_admin = account.get("email", "").lower() in ADMIN_EMAILS
     if st.button("← Voltar ao perfil", key="back_from_suggestions"):
         st.query_params.clear()
         st.query_params["profile"] = "1"
