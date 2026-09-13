@@ -7,6 +7,23 @@ import type { Preferences, WorkoutDraft, WorkoutMode, WorkoutRecord } from './ty
 const modes: Record<WorkoutMode, string> = { rounds: 'Rounds', fortime: 'For Time', amrap: 'AMRAP', emom: 'EMOM' }
 const defaultDraft: WorkoutDraft = { name: 'Treino livre', mode: 'rounds', goal: 20, durationSec: 720, workSec: 60, restSec: 0 }
 const defaultPreferences: Preferences = { sound: true, vibration: true, wakeLock: true }
+const ADMIN_EMAIL = 'sgabrielcardosoc7@gmail.com'
+
+type Suggestion = {
+  id: string
+  user_id: string
+  user_email: string
+  category: 'melhoria' | 'erro' | 'novo_recurso' | 'outro'
+  title: string
+  message: string
+  status: 'nova' | 'em_analise' | 'planejada' | 'concluida' | 'recusada'
+  priority: 'baixa' | 'normal' | 'alta'
+  admin_notes: string | null
+  created_at: string
+}
+
+const suggestionCategory = { melhoria: 'Melhoria', erro: 'Problema', novo_recurso: 'Novo recurso', outro: 'Outro' }
+const suggestionStatus = { nova: 'Nova', em_analise: 'Em análise', planejada: 'Planejada', concluida: 'Concluída', recusada: 'Não planejada' }
 
 type ActiveWorkout = WorkoutDraft & {
   rounds: number
@@ -290,6 +307,76 @@ function SettingsScreen({ value, onChange }: { value: Preferences; onChange: (va
   return <section className="view"><h1>Ajustes</h1><p className="sub">Escolha como o aplicativo responde durante o treino.</p><div className="settings-card">{setting('sound', 'Som', 'Alerta a cada round e intervalo')}{setting('vibration', 'Vibração', 'Confirma rounds e ações')}{setting('wakeLock', 'Tela sempre ativa', 'Evita bloqueio durante o treino')}</div></section>
 }
 
+function SuggestionsScreen({ user }: { user: User }) {
+  const admin = user.email?.toLowerCase() === ADMIN_EMAIL
+  const [items, setItems] = useState<Suggestion[]>([])
+  const [loading, setLoading] = useState(true)
+  const [sending, setSending] = useState(false)
+  const [category, setCategory] = useState<Suggestion['category']>('melhoria')
+  const [title, setTitle] = useState('')
+  const [message, setMessage] = useState('')
+  const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const { data, error } = await supabase.from('suggestions').select('*').order('created_at', { ascending: false }).limit(200)
+    if (error) setNotice({ kind: 'error', text: safeMessage(error) })
+    else setItems((data || []) as Suggestion[])
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { void load() }, [load])
+
+  async function submit(event: FormEvent) {
+    event.preventDefault(); setNotice(null)
+    if (title.trim().length < 3) return setNotice({ kind: 'error', text: 'Dê um título curto para sua sugestão.' })
+    if (message.trim().length < 10) return setNotice({ kind: 'error', text: 'Conte um pouco mais sobre sua ideia.' })
+    setSending(true)
+    const { error } = await supabase.from('suggestions').insert({ user_id: user.id, user_email: user.email, category, title: title.trim(), message: message.trim() })
+    if (error) setNotice({ kind: 'error', text: safeMessage(error) })
+    else {
+      setTitle(''); setMessage(''); setCategory('melhoria')
+      setNotice({ kind: 'ok', text: 'Sugestão enviada. Obrigado por ajudar o RoundTap a evoluir!' })
+      await load()
+    }
+    setSending(false)
+  }
+
+  async function updateSuggestion(id: string, changes: Partial<Pick<Suggestion, 'status' | 'priority' | 'admin_notes'>>) {
+    const { error } = await supabase.from('suggestions').update({ ...changes, updated_at: new Date().toISOString() }).eq('id', id)
+    if (error) setNotice({ kind: 'error', text: safeMessage(error) })
+    else {
+      setItems(current => current.map(item => item.id === id ? { ...item, ...changes } : item))
+      setNotice({ kind: 'ok', text: 'Sugestão atualizada.' })
+    }
+  }
+
+  return <section className="view suggestions">
+    <h1>{admin ? 'Central de sugestões' : 'Ajude o RoundTap a evoluir'}</h1>
+    <p className="sub">{admin ? 'Avalie as ideias enviadas pelos atletas e organize o que entra nas próximas versões.' : 'Envie uma melhoria, novo recurso ou problema que você encontrou.'}</p>
+    <form className="card form suggestion-form" onSubmit={submit}>
+      <label>Tipo<select value={category} onChange={event => setCategory(event.target.value as Suggestion['category'])}>{Object.entries(suggestionCategory).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+      <label>Título<input value={title} onChange={event => setTitle(event.target.value)} maxLength={100} placeholder="Ex.: adicionar aviso de descanso" required /></label>
+      <label>Detalhes<textarea value={message} onChange={event => setMessage(event.target.value)} maxLength={2000} rows={5} placeholder="Explique como essa melhoria ajudaria no treino." required /></label>
+      <div className="character-count">{message.length}/2000</div>
+      <button className="primary" disabled={sending}>{sending ? 'Enviando…' : 'Enviar sugestão'}</button>
+    </form>
+    {notice && <div className={`notice ${notice.kind}`}>{notice.text}</div>}
+    <h2 className="suggestion-list-title">{admin ? `Caixa de entrada (${items.length})` : 'Minhas sugestões'}</h2>
+    {loading ? <div className="empty">Carregando…</div> : !items.length ? <div className="empty">Nenhuma sugestão enviada ainda.</div> : <div className="suggestion-list">{items.map(item => <article className="suggestion-card" key={item.id}>
+      <header><div><span>{suggestionCategory[item.category]}</span><strong>{item.title}</strong></div><time>{new Date(item.created_at).toLocaleDateString('pt-BR')}</time></header>
+      <p>{item.message}</p>{admin && <small>{item.user_email}</small>}
+      <div className="suggestion-meta"><span className={`status status-${item.status}`}>{suggestionStatus[item.status]}</span><span>Prioridade: {item.priority}</span></div>
+      {item.admin_notes && <div className="admin-note"><b>Retorno do RoundTap</b>{item.admin_notes}</div>}
+      {admin && <div className="admin-controls">
+        <label>Status<select value={item.status} onChange={event => void updateSuggestion(item.id, { status: event.target.value as Suggestion['status'] })}>{Object.entries(suggestionStatus).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+        <label>Prioridade<select value={item.priority} onChange={event => void updateSuggestion(item.id, { priority: event.target.value as Suggestion['priority'] })}><option value="baixa">Baixa</option><option value="normal">Normal</option><option value="alta">Alta</option></select></label>
+        <label className="admin-notes">Retorno ao usuário<textarea defaultValue={item.admin_notes || ''} maxLength={2000} rows={3} onBlur={event => void updateSuggestion(item.id, { admin_notes: event.target.value.trim() || null })} /></label>
+      </div>}
+    </article>)}</div>}
+  </section>
+}
+
 function LegalScreen({ type, onBack }: { type: 'privacy' | 'terms'; onBack: () => void }) {
   return <section className="view legal"><button className="back-link" onClick={onBack}>← Voltar</button><h1>{type === 'privacy' ? 'Política de Privacidade' : 'Termos de Uso'}</h1>{type === 'privacy' ? <><p>O RoundTap armazena dados de conta e resultados de treinos para sincronização entre dispositivos.</p><h2>Dados tratados</h2><p>Nome, e-mail, configurações e histórico de treinos. Senhas são tratadas pelo Supabase Auth e não ficam disponíveis ao RoundTap.</p><h2>Seus direitos</h2><p>Você pode exportar seus dados ou excluir sua conta pelo perfil. A exclusão remove permanentemente o perfil e os treinos.</p></> : <><p>O RoundTap é uma ferramenta de apoio para contagem e registro de treinos. Ele não substitui orientação profissional.</p><h2>Uso responsável</h2><p>Interrompa o exercício em caso de dor ou mal-estar e procure orientação adequada.</p><h2>Disponibilidade</h2><p>Durante o período de testes, funcionalidades podem ser ajustadas e indisponibilidades temporárias podem ocorrer.</p></>}</section>
 }
@@ -343,7 +430,7 @@ function ResetPasswordScreen({ onDone }: { onDone: () => void }) {
 
 function Shell({ session }: { session: Session }) {
   const user = session.user
-  const [page, setPage] = useState<'workout' | 'history' | 'settings' | 'profile' | 'privacy' | 'terms'>('workout')
+  const [page, setPage] = useState<'workout' | 'history' | 'suggestions' | 'settings' | 'profile' | 'privacy' | 'terms'>('workout')
   const [historyRefresh, setHistoryRefresh] = useState(0)
   const [preferences, setPreferences] = useState<Preferences>(() => { try { return { ...defaultPreferences, ...JSON.parse(localStorage.getItem(`roundtap-v3-settings-${user.id}`) || '{}') } } catch { return defaultPreferences } })
   useEffect(() => localStorage.setItem(`roundtap-v3-settings-${user.id}`, JSON.stringify(preferences)), [preferences, user.id])
@@ -351,10 +438,11 @@ function Shell({ session }: { session: Session }) {
     if (page === 'profile') return <ProfileScreen user={user} onBack={() => setPage('workout')} onLegal={setPage} />
     if (page === 'privacy' || page === 'terms') return <LegalScreen type={page} onBack={() => setPage('profile')} />
     if (page === 'history') return <HistoryScreen user={user} refresh={historyRefresh} />
+    if (page === 'suggestions') return <SuggestionsScreen user={user} />
     if (page === 'settings') return <SettingsScreen value={preferences} onChange={setPreferences} />
     return <WorkoutScreen user={user} preferences={preferences} onSaved={() => setHistoryRefresh(x => x + 1)} />
   }, [historyRefresh, page, preferences, user])
-  return <main className="app-shell"><header className="app-header"><Logo /><button className="profile-button" onClick={() => setPage('profile')} aria-label="Abrir meu perfil"><span>{String(user.user_metadata.full_name || user.email || 'A').charAt(0).toUpperCase()}</span></button></header>{content}{['workout', 'history', 'settings'].includes(page) && <nav><button className={page === 'workout' ? 'active' : ''} onClick={() => setPage('workout')}>◉<span>Treino</span></button><button className={page === 'history' ? 'active' : ''} onClick={() => setPage('history')}>▤<span>Histórico</span></button><button className={page === 'settings' ? 'active' : ''} onClick={() => setPage('settings')}>⚙<span>Ajustes</span></button></nav>}</main>
+  return <main className="app-shell"><header className="app-header"><Logo /><button className="profile-button" onClick={() => setPage('profile')} aria-label="Abrir meu perfil"><span>{String(user.user_metadata.full_name || user.email || 'A').charAt(0).toUpperCase()}</span></button></header>{content}{['workout', 'history', 'suggestions', 'settings'].includes(page) && <nav><button className={page === 'workout' ? 'active' : ''} onClick={() => setPage('workout')}>◉<span>Treino</span></button><button className={page === 'history' ? 'active' : ''} onClick={() => setPage('history')}>▤<span>Histórico</span></button><button className={page === 'suggestions' ? 'active' : ''} onClick={() => setPage('suggestions')}>✦<span>Sugestões</span></button><button className={page === 'settings' ? 'active' : ''} onClick={() => setPage('settings')}>⚙<span>Ajustes</span></button></nav>}</main>
 }
 
 export default function App() {

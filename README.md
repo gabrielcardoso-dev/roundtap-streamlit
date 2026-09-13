@@ -14,6 +14,7 @@ Recursos disponíveis:
 - rounds automáticos no EMOM, descanso configurável e repetições parciais;
 - desfazer round, som, vibração e tela sempre ativa;
 - histórico sincronizado por usuário e fila offline;
+- caixa de sugestões vinculada à conta, acompanhamento de status e painel administrativo;
 - políticas RLS para isolamento dos dados no Supabase;
 - PWA instalável e configuração do Capacitor para futuros builds nativos.
 
@@ -38,7 +39,7 @@ A chave publicável do Supabase pode ficar no cliente. Nunca coloque a `service_
 
 ### Banco de dados
 
-Execute `supabase/migrations/001_roundtap_v3.sql` no projeto Supabase. A migração cria os perfis e treinos, ativa RLS, restringe cada usuário aos próprios registros e adiciona a função de autoexclusão da conta.
+Execute, em ordem, `supabase/migrations/001_roundtap_v3.sql` e `supabase/migrations/002_suggestions.sql` no projeto Supabase. As migrações criam perfis, treinos e sugestões, ativam RLS, restringem cada usuário aos próprios registros e liberam a central administrativa somente para o proprietário do RoundTap.
 
 Adicione a URL publicada à lista de URLs permitidas em Authentication > URL Configuration antes de testar confirmação de e-mail e recuperação de senha.
 

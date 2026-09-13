@@ -1,0 +1,26 @@
+.suggestions select,.suggestions textarea{font:inherit}
+.app-shell>nav{grid-template-columns:repeat(4,1fr)}
+.suggestion-form{margin-bottom:16px}
+.suggestion-form select,.suggestion-form textarea,.admin-controls select,.admin-controls textarea{width:100%;background:#0a1610;border:1px solid #354a3c;color:#fff;border-radius:12px;padding:13px 14px;outline:none}
+.suggestion-form select:focus,.suggestion-form textarea:focus,.admin-controls select:focus,.admin-controls textarea:focus{border-color:var(--lime)}
+.suggestion-form textarea,.admin-controls textarea{resize:vertical;line-height:1.45}
+.character-count{text-align:right;color:var(--muted);font-size:.7rem;margin-top:5px}
+.suggestion-list-title{font-size:1.05rem;margin:22px 0 10px}
+.suggestion-list{display:grid;gap:11px}
+.suggestion-card{border:1px solid var(--line);background:linear-gradient(145deg,#102018,#0b1711);border-radius:15px;padding:15px}
+.suggestion-card header{display:flex;justify-content:space-between;gap:12px}
+.suggestion-card header span,.suggestion-card header strong{display:block}
+.suggestion-card header span{color:var(--lime);font-size:.68rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}
+.suggestion-card time,.suggestion-card>small{color:var(--muted);font-size:.7rem}
+.suggestion-card>p{color:#d9dfda;line-height:1.5;margin:13px 0;white-space:pre-wrap}
+.suggestion-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--muted);font-size:.7rem;margin-top:12px}
+.status{border:1px solid #3b473d;border-radius:999px;padding:5px 8px;color:#d9dfda}
+.status-planejada,.status-concluida{border-color:#608415;color:var(--lime)}
+.status-em_analise{border-color:#796b2a;color:var(--amber)}
+.admin-note{margin-top:12px;border-left:3px solid var(--lime);background:#111a12;padding:10px 12px;border-radius:0 8px 8px 0;color:#c9d1cb;font-size:.8rem;line-height:1.45}
+.admin-note b{display:block;color:var(--lime);margin-bottom:3px}
+.admin-controls{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:13px;padding-top:13px;border-top:1px solid var(--line)}
+.admin-controls label{display:grid;gap:5px;color:var(--muted);font-size:.7rem}
+.admin-controls select,.admin-controls textarea{padding:9px}
+.admin-notes{grid-column:1/-1}
+@media(max-width:390px){.app-shell>nav{left:8px;right:8px}.app-shell>nav button{font-size:1rem}.app-shell>nav button span{font-size:.58rem}.admin-controls{grid-template-columns:1fr}}

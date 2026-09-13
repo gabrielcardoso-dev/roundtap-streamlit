@@ -26,6 +26,7 @@ def secret(name: str) -> str:
 
 SUPABASE_URL = secret("SUPABASE_URL").rstrip("/")
 SUPABASE_ANON_KEY = secret("SUPABASE_ANON_KEY")
+ADMIN_EMAIL = "sgabrielcardosoc7@gmail.com"
 
 
 def auth_request(path: str, payload: dict) -> tuple[dict, str | None]:
@@ -122,6 +123,32 @@ def update_password(access_token: str, password: str) -> str | None:
         return message or "Não foi possível alterar a senha."
     except (requests.RequestException, ValueError):
         return "O serviço de acesso está temporariamente indisponível. Tente novamente."
+
+
+def suggestions_request(method: str, query: str = "", payload: dict | None = None) -> tuple[list | dict, str | None]:
+    account = st.session_state.get("auth") or {}
+    token = account.get("access_token", "")
+    try:
+        response = requests.request(
+            method,
+            f"{SUPABASE_URL}/rest/v1/suggestions{query}",
+            headers={
+                "apikey": SUPABASE_ANON_KEY,
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "Prefer": "return=representation",
+            },
+            json=payload,
+            timeout=15,
+        )
+        data = response.json() if response.content else []
+        if response.ok:
+            return data, None
+        if response.status_code == 401:
+            return [], "Sua sessão expirou. Entre novamente."
+        return [], "Não foi possível acessar a caixa de sugestões."
+    except (requests.RequestException, ValueError):
+        return [], "O serviço de sugestões está temporariamente indisponível."
 
 
 def render_brand() -> None:
@@ -249,10 +276,94 @@ def render_profile() -> None:
             else:
                 st.success("Senha alterada com sucesso.")
 
+    if st.button("✦ Enviar sugestão", use_container_width=True, key="open_suggestions"):
+        st.query_params.clear()
+        st.query_params["suggestions"] = "1"
+        st.rerun()
+
     if st.button("Sair do aplicativo", use_container_width=True, type="secondary"):
         st.session_state.pop("auth", None)
         st.query_params.clear()
         st.rerun()
+
+
+def render_suggestions() -> None:
+    account = st.session_state.auth
+    is_admin = account.get("email", "").lower() == ADMIN_EMAIL
+    if st.button("← Voltar ao perfil", key="back_from_suggestions"):
+        st.query_params.clear()
+        st.query_params["profile"] = "1"
+        st.rerun()
+
+    st.markdown(
+        "<h1 class='rt-title'>" + ("Central de sugestões" if is_admin else "Ajude o RoundTap a evoluir") + "</h1>"
+        "<p class='rt-sub'>" + ("Avalie as ideias dos atletas e organize as próximas versões." if is_admin else "Envie uma melhoria, novo recurso ou problema que você encontrou.") + "</p>",
+        unsafe_allow_html=True,
+    )
+
+    category_labels = {"Melhoria": "melhoria", "Problema": "erro", "Novo recurso": "novo_recurso", "Outro": "outro"}
+    with st.form("suggestion_form", clear_on_submit=True):
+        category_label = st.selectbox("Tipo", list(category_labels))
+        title = st.text_input("Título", max_chars=100, placeholder="Ex.: adicionar aviso de descanso")
+        message = st.text_area("Detalhes", max_chars=2000, height=140, placeholder="Explique como essa melhoria ajudaria no treino.")
+        sent = st.form_submit_button("Enviar sugestão", use_container_width=True)
+    if sent:
+        if len(title.strip()) < 3:
+            st.error("Dê um título curto para sua sugestão.")
+        elif len(message.strip()) < 10:
+            st.error("Conte um pouco mais sobre sua ideia.")
+        else:
+            _, error = suggestions_request("POST", payload={
+                "user_id": account.get("user_id"),
+                "user_email": account.get("email"),
+                "category": category_labels[category_label],
+                "title": title.strip(),
+                "message": message.strip(),
+            })
+            if error:
+                st.error(error)
+            else:
+                st.success("Sugestão enviada. Obrigado por ajudar o RoundTap a evoluir!")
+
+    items, error = suggestions_request("GET", "?select=*&order=created_at.desc&limit=200")
+    st.markdown("<h2 class='profile-section'>" + (f"Caixa de entrada ({len(items)})" if is_admin else "Minhas sugestões") + "</h2>", unsafe_allow_html=True)
+    if error:
+        st.error(error)
+        return
+    if not items:
+        st.info("Nenhuma sugestão enviada ainda.")
+        return
+
+    status_labels = {"nova": "Nova", "em_analise": "Em análise", "planejada": "Planejada", "concluida": "Concluída", "recusada": "Não planejada"}
+    for item in items:
+        with st.container(border=True):
+            st.caption(f"{item.get('category', '').replace('_', ' ').title()} • {item.get('created_at', '')[:10]}")
+            st.markdown(f"**{html.escape(item.get('title', ''))}**")
+            st.write(item.get("message", ""))
+            if is_admin:
+                st.caption(item.get("user_email", ""))
+            st.markdown(f"Status: **{status_labels.get(item.get('status'), item.get('status', ''))}** · Prioridade: **{item.get('priority', 'normal')}**")
+            if item.get("admin_notes"):
+                st.success(f"Retorno do RoundTap: {item['admin_notes']}")
+            if is_admin:
+                with st.form(f"manage_{item['id']}"):
+                    statuses = list(status_labels)
+                    priorities = ["baixa", "normal", "alta"]
+                    selected_status = st.selectbox("Status", statuses, index=statuses.index(item.get("status", "nova")), format_func=status_labels.get)
+                    selected_priority = st.selectbox("Prioridade", priorities, index=priorities.index(item.get("priority", "normal")))
+                    notes = st.text_area("Retorno ao usuário", value=item.get("admin_notes") or "", max_chars=2000)
+                    save = st.form_submit_button("Salvar atualização")
+                if save:
+                    _, update_error = suggestions_request(
+                        "PATCH",
+                        f"?id=eq.{item['id']}",
+                        {"status": selected_status, "priority": selected_priority, "admin_notes": notes.strip() or None},
+                    )
+                    if update_error:
+                        st.error(update_error)
+                    else:
+                        st.success("Sugestão atualizada.")
+                        st.rerun()
 
 
 st.markdown(
@@ -306,6 +417,8 @@ if not SUPABASE_URL or not SUPABASE_ANON_KEY:
     st.info("Configure SUPABASE_URL e SUPABASE_ANON_KEY nos Secrets do Streamlit.")
 elif st.session_state.get("auth") and st.query_params.get("profile") == "1":
     render_profile()
+elif st.session_state.get("auth") and st.query_params.get("suggestions") == "1":
+    render_suggestions()
 elif st.session_state.get("auth"):
     render_roundtap()
 else:
