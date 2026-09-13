@@ -39,13 +39,13 @@ create policy "suggestions_select_own_or_admin" on public.suggestions
   for select to authenticated
   using (
     (select auth.uid()) = user_id
-    or lower(coalesce((select auth.jwt() ->> 'email'), '')) = 'sgabrielcardosoc7@gmail.com'
+    or lower(coalesce((select auth.jwt() ->> 'email'), '')) in ('sgabrielcardosoc@gmail.com', 'sgabrielcardosoc7@gmail.com')
   );
 
 drop policy if exists "suggestions_update_admin" on public.suggestions;
 create policy "suggestions_update_admin" on public.suggestions
   for update to authenticated
-  using (lower(coalesce((select auth.jwt() ->> 'email'), '')) = 'sgabrielcardosoc7@gmail.com')
-  with check (lower(coalesce((select auth.jwt() ->> 'email'), '')) = 'sgabrielcardosoc7@gmail.com');
+  using (lower(coalesce((select auth.jwt() ->> 'email'), '')) in ('sgabrielcardosoc@gmail.com', 'sgabrielcardosoc7@gmail.com'))
+  with check (lower(coalesce((select auth.jwt() ->> 'email'), '')) in ('sgabrielcardosoc@gmail.com', 'sgabrielcardosoc7@gmail.com'));
 
 commit;
